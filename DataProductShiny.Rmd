@@ -1,0 +1,86 @@
+---
+title: "Survival Probability of Titanic Passengers"
+author: "Charmeine Ko"
+date: "7/18/2020"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+## Overview
+The project aims to model the survival probability of a Titanic passenger based on the "Titanic" data set from R package "datasets". "Titanic" provides information on the fate of passengers on the famous tragedy of "Titanic" ocean liner, summarized by class status, sex, age, and survival. 
+  
+The Shiny application is available [here](https://lko26.shinyapps.io/DataProducts/). 
+  
+Source codes are availabel on [Github](https://github.com/shumengk/DataProducts).
+
+## For Users
+There are three input options available on the application:  
+   
+1. Class (default: 1st)  
+2. Sex (default: Male)  
+3. Age (default: Child)  
+  
+Upon selecting desired features, the user will press the "Submit" button to obtain the survival probability of a passenger with the chosen attributes. In addition, survival probability distribution is plotted for each colored by predictor value, with the chosen feature highlighted.  
+
+## Titanic Passenger Data
+The original data set is a cross-tabulation table, which aggregates individuals that have the specific characteristics and records the frequency.
+
+```{r libraries, echo=FALSE, message=FALSE, cache=TRUE}
+library(datasets)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+```
+```{r preprocess, echo=TRUE, message=FALSE}
+str(data.frame(Titanic))
+```
+## Data Processing
+For modeling purpose, the data set is first transformed into the long format, meaning that each observation occupies one row.
+```{r transform, echo=TRUE, message=FALSE}
+Titanic1 <- data.frame(Titanic) %>%
+    rowwise() %>%
+    mutate(Freq = list(seq(1, Freq))) %>%
+    ungroup() %>%
+    unnest(cols=c(Freq)) %>%
+    select(-Freq)
+str(Titanic1)
+```
+## Sample Data Analysis
+Logistic regression is used to model the survival probability of Titanic passengers. The following is the survival probability of a 1st Class, female, child passenger:  
+```{r modeling, echo = FALSE, cache=TRUE}
+logit2prob <- function(logit){
+    odds <- exp(logit)
+    prob <- odds / (1 + odds)
+    return(prob)
+}
+mod <- glm(Survived~Class+Sex+Age, data=Titanic1, family="binomial")
+pred <- predict(mod, Titanic1)
+Titanic1$Pred <- logit2prob(pred)
+
+```
+```{r prediction, echo = TRUE}
+# mod is the logistic regression model, and logit2prob converts logit output to probability
+logit2prob(predict(mod, data.frame(Class="1st", Sex="Female", Age="Child")))
+```
+The sample probability distribution plots are shown below, note that the curves for "1st Class", "Female", and "Child" are highlighted, in comparison to the other values.
+```{r plot_prep, echo = FALSE, cache = TRUE, message = FALSE}
+p1 <- ggplot(Titanic1, aes(x=Pred, fill=Class, alpha = Class == "1st")) +
+            geom_density() + theme_bw() +
+            scale_alpha_manual(values=c(0.5, 1), guide=FALSE) + 
+            labs(title="Class") +
+            xlab("Probability")
+p2 <- ggplot(Titanic1, aes(x=Pred, fill=Sex, alpha = Sex == "Female")) +
+            geom_density() + theme_bw() +
+            scale_alpha_manual(values=c(0.5, 1), guide=FALSE) + 
+            labs(title="Gender") +
+            xlab("Probability")
+p3 <-  ggplot(Titanic1, aes(x=Pred, fill=Age, alpha = Age == "Child")) +
+            geom_density() + theme_bw() +
+            scale_alpha_manual(values=c(0.5, 1), guide=FALSE) + 
+            labs(title="Age Group") +
+            xlab("Probability")
+ggarrange(p1, p2, p3)
+```
